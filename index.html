@@ -1,0 +1,126 @@
+<?php
+@ini_set('zlib.output_compression',0);
+@ini_set('implicit_flush',1);
+@ob_end_clean();
+set_time_limit(0);
+ob_implicit_flush(1);
+?>
+<html>
+    <head>
+        
+    </head>
+    <body>
+        <div>
+            <form action="" method="post">
+        <input type="text" name="q">
+        <button>find</button> 
+        </form>
+        </div>
+        <?php
+            if (isset($_POST['q'])){
+                include 'index.php';
+                $pd = new PageDownloader($_POST['q']);                
+                $pp = new PageParser();
+                $topsites = array();
+                $i = 0;
+
+                while (count($topsites)<20){
+                    $google = $pd->getSites($i);                     
+                    $topsites = array_merge($topsites,$pp->parseGoogle($google));
+                    $topsites = array_unique($topsites);
+                    $i++;        
+                }
+
+                echo 'Parsed sites found ' . count($topsites) . ' links' . "\n";
+                foreach ($topsites as $key => $value) {
+                    echo '<div><a href="'.$value.'">'.$value.'</a></div>';
+                }
+                flush();
+
+                $links = array();
+                foreach ($topsites as $key => $value) {
+                    $tmp = $pd->getIndexOfSite($value);
+                    $tmp = $pp->parsePageForLinks($tmp);
+                    $links = array_merge($links,$tmp);    
+                }
+                $links = array_unique($links);
+                echo '<br> Parsed links found ' . count($links) . "<br />";
+                flush();
+
+
+                $brokenLinks = array();
+                $c = 0;
+                $j = floor(count($links)/ 10);
+                foreach ($links as $key => $value) { 
+
+                    // $value = explode(".",$value);
+                    // if (count($value)>2){
+                    //     $tmp = '';
+                    //     $tmp = array_pop($value);
+                    //     $tmp = array_pop($value) . "." . $tmp;
+                    //     $value = $tmp;
+                    // }else{
+                    //     $value = implode(".",$value);
+                    // }       
+
+                    $lnk = $pd->checkLink($value);    
+                    if ($lnk){
+                        $brokenLinks[] = $value;
+                    }    
+                    $c++;                    
+                    $j--;                       
+                    if ($j < 0){
+                        $j = (int)(count($links)/ 10);
+                        echo '<br/> Checking links if they are broken : ' . round($c/count($links)*100,2) . '% done</br>';
+                        flush();
+                    }
+                }
+                echo '<br/ >Finish checikng broken links found: ' . count($brokenLinks) . '<br />';
+                flush();
+                foreach ($brokenLinks as $key => $value) {
+                    echo '<div><a href="http://'.$value.'">'.$value.'</a></div>';
+                    flush();
+                }
+         
+                $availableDomains = array();
+
+                foreach ($brokenLinks as $key => $value) {
+                    $dom = '';
+                    $available = '';
+                    
+                    $dom = $pp->getDomain("http://" . $value);
+                    $dom = rtrim($dom,'.');
+                    $available = $pd->checkDomain($dom);
+                    if ($available->available)
+                        $availableDomains[] = array(
+                            'link' => $value,
+                            'domain' => $dom,
+                            'availability' => $available->available
+                        );                                    
+                }                            
+            }
+        ?>
+        <div>
+            <?php if (isset($availableDomains)):?>                    
+            <table>                
+                <thead>
+                    <tr>
+                        <td>Link</td>
+                        <td>Domain</td>
+                        <td>Availability</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($availableDomains as $key => $value): ?>
+                        <tr>
+                            <td><?php echo $value['link'];?></td>
+                            <td><?php echo $value['domain'];?></td>
+                            <td><?php echo ($value['availability']) ? 'Yes' : 'No';?></td>
+                        </tr>
+                    <?php endforeach ?>
+                </tbody>
+            </table>
+            <?php endif?>
+        </div>
+    </body>
+</html>
